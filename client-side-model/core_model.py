@@ -5,12 +5,11 @@ from sklearn.metrics import accuracy_score
 import joblib
 
 # Load cleaned dataset (replace with actual path)
-df = pd.read_csv('../data_split/user1.csv')
+df = pd.read_csv('./user1.csv')
 print(df.head())
 
-# For demonstration using synthetic data
-from sklearn.datasets import make_classification
-X, y = make_classification(n_samples=1000, n_features=20, n_classes=2, random_state=42)
+X = df[['step', 'amount', 'oldbalanceOrg', 'newbalanceOrig', 'oldbalanceDest', 'newbalanceDest']]
+y = df['isFraud']
 
 # Split data into 80% train and 20% test
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
