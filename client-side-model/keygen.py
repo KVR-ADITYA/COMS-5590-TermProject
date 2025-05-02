@@ -5,14 +5,19 @@ import os
 import sys
 import datetime
 from botocore.exceptions import ClientError
+import requests
 
 from dotenv import load_dotenv, dotenv_values 
 
+
+load_dotenv()
 
 s3 = boto3.client('s3')
 secrets_manager = boto3.client('secretsmanager')
 api_gateway = boto3.client('apigatewaymanagementapi', 
                                 endpoint_url=os.getenv('API_GW_ENDPOINT'))
+
+API_ENDPOINT = f"{os.getenv("API_GW_ENDPOINT")}/generate-he-keys"
 
 
 def generate_keys(client_id):
@@ -54,3 +59,5 @@ def retrieve_he_keys(client_id):
     key_data = pickle.loads(response['Body'].read())
     
     return ts.context_from(key_data['private_context'])
+
+    

@@ -10,6 +10,7 @@ import datetime
 import time
 import numpy as np
 import json
+import requests
 from botocore.exceptions import ClientError
 
 from dotenv import load_dotenv, dotenv_values 
@@ -17,7 +18,9 @@ from dotenv import load_dotenv, dotenv_values
 from keygen import generate_keys, retrieve_he_keys
 
 
-load_dotenv() 
+load_dotenv()
+
+API_ENDPOINT = f"{os.getenv("API_GW_ENDPOINT")}/generate-he-keys" 
 
 class FederatedClient:
     def __init__(self, session, client_id, data_path):
@@ -39,10 +42,38 @@ class FederatedClient:
         """Load or create homomorphic encryption keys"""
         try:
             # Try to load existing keys from Secrets Manager
-            self.context = retrieve_he_keys(self.client_id)
+            self.context = self.get_he_keys(self.client_id)
             
         except ClientError as e:
-            self.context = generate_keys(self.client_id)
+            self.context = self.create_he_keys(self.client_id)
+    
+    def get_he_keys(self, client_id):
+    
+        response = requests.get(API_ENDPOINT, params={"client_id": client_id})
+        
+        print(response.json())
+        
+        s3_obj = self.s3.get_object(
+            Bucket='fraud-detection-encrypted-keys',
+            Key=response.json()["s3_key"]
+        )
+        
+        key_data = pickle.loads(s3_obj['Body'].read())
+        
+        return ts.context_from(key_data['private_context'])
+
+    def create_he_keys(self, client_id):
+        
+        response = requests.post(API_ENDPOINT, params={"client_id": client_id})
+        
+        s3_obj = self.s3.get_object(
+            Bucket='fraud-detection-encrypted-keys',
+            Key=response.json()["s3_key"]
+        )
+        
+        key_data = pickle.loads(s3_obj['Body'].read())
+        
+        return ts.context_from(key_data['private_context'])
                 
     def load_data(self):
         """Load client's local data"""
@@ -106,7 +137,7 @@ class FederatedClient:
         n_features = len(self.model.coef_[0])
         self.model.coef_ = np.array([decrypted_weights[:n_features]])  # 2D array
         self.model.intercept_ = np.array([decrypted_weights[-1]])
-
+        
 
 
 def main():
