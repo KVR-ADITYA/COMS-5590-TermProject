@@ -20,7 +20,7 @@ from keygen import generate_keys, retrieve_he_keys
 
 load_dotenv()
 
-API_ENDPOINT = f"{os.getenv("API_GW_ENDPOINT")}/generate-he-keys" 
+API_ENDPOINT = os.getenv("API_ENDPOINT")
 
 class FederatedClient:
     def __init__(self, session, client_id, data_path):

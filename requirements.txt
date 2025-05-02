@@ -5,6 +5,5 @@ numpy
 dotenv
 boto3
 botocore
-time
 json
 requests
