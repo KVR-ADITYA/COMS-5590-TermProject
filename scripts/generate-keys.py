@@ -64,8 +64,8 @@ def initialize_keys():
             logger.error(f"S3 access error: {str(e)}")
             return jsonify({"error": "S3 access error"}), 500
 
-@app.route('/keys', methods=['GET'])
-def get_key():
+@app.route('/keys/client', methods=['GET'])
+def get_client_key():
     """Get the S3 key for the complete key pair"""
     try:
         s3.head_object(Bucket=KEYS_BUCKET, Key=MASTER_KEY_PATH)
@@ -73,6 +73,19 @@ def get_key():
             "status": "exists",
             "s3_key": MASTER_KEY_PATH,
             "bucket": KEYS_BUCKET
+        }), 200
+    except ClientError as e:
+        return jsonify({"error": "Key pair not found"}), 404
+    
+@app.route('/keys/aggregator', methods=['GET'])
+def get_aggregator_key():
+    """Get the S3 key for the public context"""
+    try:
+        s3.head_object(Bucket=WEIGHTS_BUCKET, Key=PUBLIC_KEY_PATH)
+        return jsonify({
+            "status": "exists",
+            "s3_key": PUBLIC_KEY_PATH,
+            "bucket": WEIGHTS_BUCKET
         }), 200
     except ClientError as e:
         return jsonify({"error": "Key pair not found"}), 404
