@@ -44,33 +44,34 @@ class FederatedClient:
             # Try to load existing keys from Secrets Manager
             self.context = self.get_he_keys(self.client_id)
             
-        except ClientError as e:
+        except Exception as e:
             self.context = self.create_he_keys(self.client_id)
     
     def get_he_keys(self, client_id):
     
-        response = requests.get(API_ENDPOINT, params={"client_id": client_id})
+        response = requests.get(API_ENDPOINT)
         
-        print(response.json())
-        
+        if response.status_code != 200:
+            raise Exception("Failed to get key reference")
+                
+        # fraud-detection-encrypted-keys
         s3_obj = self.s3.get_object(
-            Bucket='fraud-detection-encrypted-keys',
+            Bucket=response.json()["bucket"],
             Key=response.json()["s3_key"]
         )
         
         key_data = pickle.loads(s3_obj['Body'].read())
         
+        # Contains both private and public
         return ts.context_from(key_data['private_context'])
 
-    def create_he_keys(self, client_id):
+    def create_he_keys(self):
         
-        response = requests.post(
-            API_ENDPOINT,
-            json={"client_id": client_id}
-        )
+        response = requests.post(API_ENDPOINT)
         
+        # fraud-detection-encrypted-keys
         s3_obj = self.s3.get_object(
-            Bucket='fraud-detection-encrypted-keys',
+            Bucket=response.json()["bucket"],
             Key=response.json()["s3_key"]
         )
         
