@@ -64,7 +64,10 @@ class FederatedClient:
 
     def create_he_keys(self, client_id):
         
-        response = requests.post(API_ENDPOINT, params={"client_id": client_id})
+        response = requests.post(
+            API_ENDPOINT,
+            json={"client_id": client_id}
+        )
         
         s3_obj = self.s3.get_object(
             Bucket='fraud-detection-encrypted-keys',
@@ -143,7 +146,7 @@ class FederatedClient:
 def main():
     session = boto3.Session(profile_name='client1_user_5590')
     
-    client = FederatedClient(session, client_id=1, data_path="../user1.csv")
+    client = FederatedClient(session, client_id=13, data_path="../user1.csv")
     
     client.load_data()
     client.train_local_model()

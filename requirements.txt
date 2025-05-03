@@ -5,5 +5,4 @@ numpy
 dotenv
 boto3
 botocore
-json
 requests

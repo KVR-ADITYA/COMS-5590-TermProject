@@ -1,0 +1,7 @@
+flask
+tenseal
+numpy
+dotenv
+boto3
+botocore
+requests

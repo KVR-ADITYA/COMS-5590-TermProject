@@ -1,9 +1,0 @@
-pandas
-scikit-learn
-tenseal
-numpy
-dotenv
-boto3
-botocore
-json
-requests
