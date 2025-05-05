@@ -121,7 +121,7 @@ class FederatedClient:
         
         try:
             response = requests.post(
-                f"{API_ENDPOINT}/aggregator/update",
+                f"{API_ENDPOINT}/aggregator",
                 json={
                     'client_id': self.client_id,
                     's3_key': s3_key

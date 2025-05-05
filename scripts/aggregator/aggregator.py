@@ -1,16 +1,20 @@
 from flask import Flask, request, jsonify
 import tenseal as ts
 import boto3
+import pickle
 import numpy as np
 from botocore.exceptions import ClientError
 import logging
 from datetime import datetime, timedelta
 import requests
 import os
+from dotenv import load_dotenv, dotenv_values 
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+load_dotenv()
 
 EXPECTED_CLIENTS = {"client1", "client2"}
 WEIGHTS_BUCKET = "fraud-detection-encrypted-weights"
@@ -18,6 +22,7 @@ API_ENDPOINT = os.getenv("API_ENDPOINT")
 
 received_updates = set()
 s3 = boto3.client("s3")
+
 
 
 class Aggregator:
@@ -29,7 +34,15 @@ class Aggregator:
         """Get public context from key service"""
         try:
             response = requests.get(f"{API_ENDPOINT}/keys/aggregator")
-            self.context = ts.context_from(response.content)
+            
+            s3_obj = s3.get_object(
+            Bucket=response.json()["bucket"],
+            Key=response.json()["s3_key"]
+            )
+            
+            public_context = pickle.loads(s3_obj['Body'].read())
+            
+            self.context = ts.context_from(public_context)
         except Exception as e:
             logger.error(f"Failed to get public context: {str(e)}")
             raise
@@ -63,7 +76,7 @@ class Aggregator:
         )
         return True
 
-@app.route('/update', methods=['POST'])
+@app.route('/aggregator/update', methods=['POST'])
 def client_update():
     """Endpoint for clients to notify they've uploaded weights"""
     global received_updates
