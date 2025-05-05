@@ -30,9 +30,7 @@ class FederatedClient:
         
         # Initialize AWS clients
         self.s3 = session.client('s3')
-        self.secrets_manager = session.client('secretsmanager')
-        self.api_gateway = session.client('apigatewaymanagementapi', 
-                                       endpoint_url=os.getenv('API_GW_ENDPOINT'))
+        self.model = LogisticRegression(max_iter=1000, random_state=42)
         
         # Load or create HE keys
         self.setup_cryptography()
@@ -85,13 +83,35 @@ class FederatedClient:
         self.y = df['isFraud']
     
     def train_local_model(self):
-        self.model = LogisticRegression(max_iter=1000, random_state=42)
         self.model.fit(self.X, self.y)
         
         # Evaluate local model
         preds = self.model.predict(self.X)
         accuracy = accuracy_score(self.y, preds)
         print(f"Local model accuracy: {accuracy:.4f}")
+    
+    def train_downloaded_model(self):
+        self.model.fit(self.X, self.y)
+        
+        preds = self.model.predict(self.X)
+        accuracy = accuracy_score(self.y, preds)
+        print(f"Updated model accuracy: {accuracy:.4f}")
+    
+    def train_or_update_model(self):
+        """Try to download latest model first, fall back to new training"""
+        try:
+            # Attempt to download and load aggregated model
+            self.download_aggregated_model()
+            print("Loaded aggregated model as starting point")
+            
+            # Fine-tune the downloaded model
+            self.train_downloaded_model()
+            
+            print("Fine-tuned existing model on local data")
+            
+        except Exception as e:
+            print(f"No aggregated model found ({str(e)}), training new model")
+            self.train_local_model()
                 
     
     def encrypt_weights(self):
@@ -139,21 +159,22 @@ class FederatedClient:
     def download_aggregated_model(self):
         """Download and decrypt aggregated model"""
         # Get latest aggregated model from S3
-        response = self.s3.get_object(
-            Bucket='fraud-detection-encrypted-weights',
-            Key='aggregated/latest_aggregated_model.pkl'
-        )
-        encrypted_aggregated = response['Body'].read()
         
-        # Deserialize and decrypt
-        aggregated_weights = ts.ckks_vector_from(self.context, encrypted_aggregated)
-        decrypted_weights = np.array(aggregated_weights.decrypt())
-        
-        # Update local model with proper array types
-        n_features = len(self.model.coef_[0])
-        self.model.coef_ = np.array([decrypted_weights[:n_features]])
-        self.model.intercept_ = np.array([decrypted_weights[-1]])
-        
+        try:
+            response = self.s3.get_object(
+                Bucket='fraud-detection-encrypted-weights',
+                Key='aggregated/latest_aggregated_model.pkl'
+            )
+            encrypted = response['Body'].read()
+            
+            weights = ts.ckks_vector_from(self.context, encrypted)
+            decrypted = np.array(weights.decrypt())
+            
+            n_features = len(self.X.columns)
+            self.model.coef_ = np.array([decrypted[:n_features]])
+            self.model.intercept_ = np.array([decrypted[-1:]])
+        except Exception as e:
+            raise Exception(f"Download failed: {str(e)}")
 
 
 def main(client_id, data_path):
@@ -162,26 +183,12 @@ def main(client_id, data_path):
     client = FederatedClient(session, client_id, data_path=data_path)
     
     client.load_data()
-    client.train_local_model()
+    
+    # Try to load aggregated model first
+    client.train_or_update_model()
+    
     encrypted_weights = client.encrypt_weights()
-    
     client.upload_weights(encrypted_weights)
-    
-    
-    client.s3.put_object(
-        Bucket='fraud-detection-encrypted-weights',
-        Key='aggregated/latest_aggregated_model.pkl',
-        Body=encrypted_weights
-    )
-    
-    time.sleep(15)
-    
-    
-    client.download_aggregated_model()
-    # Evaluate new model
-    preds = client.model.predict(client.X)
-    accuracy = accuracy_score(client.y, preds)
-    print(f"Updated model accuracy: {accuracy:.4f}")
     
 
 parser = argparse.ArgumentParser()

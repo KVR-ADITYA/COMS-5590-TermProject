@@ -35,12 +35,12 @@ class Aggregator:
         try:
             response = requests.get(f"{API_ENDPOINT}/keys/aggregator")
             
-            s3_obj = s3.get_object(
-            Bucket=response.json()["bucket"],
-            Key=response.json()["s3_key"]
-            )
             
-            public_context = pickle.loads(s3_obj['Body'].read())
+            s3_obj = s3.get_object(
+                Bucket=response.json()["bucket"],
+                Key=response.json()["s3_key"])
+            
+            public_context = s3_obj['Body'].read()
             
             self.context = ts.context_from(public_context)
         except Exception as e:
@@ -54,25 +54,27 @@ class Aggregator:
             
         # Initialize with first client's weights
         first_obj = s3.get_object(Bucket=WEIGHTS_BUCKET, Key=client_keys[0])
-        first_weights = ts.ckks_vector_from(self.context, first_obj['Body'].read())
-        aggregated = np.array(first_weights.decrypt())
+        aggregated = ts.ckks_vector_from(self.context, first_obj['Body'].read())
         
         # Aggregate remaining weights
         for key in client_keys[1:]:
             enc_weights = s3.get_object(Bucket=WEIGHTS_BUCKET, Key=key)
             weights = ts.ckks_vector_from(self.context, enc_weights['Body'].read())
-            aggregated += np.array(weights.decrypt())
+            aggregated += weights
         
-        aggregated /= len(client_keys)
         
-        # Re-encrypt with public context
-        enc_aggregated = ts.ckks_vector(self.context, aggregated.tolist())
+        # Setting up reciprocal since HE only supports addition and multiplication
+        N = len(client_keys)
+        scaling_factor = 1.0/N
+        scaling_vector = ts.ckks_vector(self.context, [scaling_factor])
+        
+        aggregated *= scaling_vector
         
         # Upload new model
         s3.put_object(
             Bucket=WEIGHTS_BUCKET,
             Key='aggregated/latest_aggregated_model.pkl',
-            Body=enc_aggregated.serialize()
+            Body=aggregated.serialize()
         )
         return True
 
@@ -109,7 +111,7 @@ def client_update():
             
             return jsonify({
                 "status": "aggregation_complete",
-                "success": success
+                "progress": f"{len(EXPECTED_CLIENTS)}/{len(EXPECTED_CLIENTS)}"
             })
             
         return jsonify({
