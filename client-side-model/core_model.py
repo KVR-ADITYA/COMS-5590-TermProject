@@ -147,7 +147,6 @@ class FederatedClient:
                     's3_key': s3_key
                 }
             )
-            print(response.json())
             if response.status_code != 200:
                 print(f"Failed to notify aggregator")
             else:
